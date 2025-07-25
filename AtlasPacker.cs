@@ -8,13 +8,15 @@ using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-public struct Rect {
+public struct Rect
+{
     public int X { get; }
     public int Y { get; }
     public int Width { get; }
     public int Height { get; }
 
-    public Rect(int x, int y, int width, int height) {
+    public Rect(int x, int y, int width, int height)
+    {
         X = x;
         Y = y;
         Width = width;
@@ -22,50 +24,70 @@ public struct Rect {
     }
 }
 
-public class AtlasContext: IEnumerable<KeyValuePair<string, Rect>> {
+public class AtlasContext : IEnumerable<KeyValuePair<string, Rect>>
+{
     public IReadOnlyDictionary<string, Rect> imageRectMap { get; }
-    
-    public AtlasContext(IReadOnlyDictionary<string, Rect> imageRectMap) {
+
+    public AtlasContext(IReadOnlyDictionary<string, Rect> imageRectMap)
+    {
         this.imageRectMap = imageRectMap;
     }
 
-    public IEnumerator<KeyValuePair<string, Rect>> GetEnumerator() {
+    public IEnumerator<KeyValuePair<string, Rect>> GetEnumerator()
+    {
         return imageRectMap.GetEnumerator();
     }
 
-    IEnumerator IEnumerable.GetEnumerator() {
+    IEnumerator IEnumerable.GetEnumerator()
+    {
         return GetEnumerator();
     }
 }
 
-public class AtlasPack {
-    public AtlasContext context;
-    public AtlasImage image;
-    
-    public AtlasPack(AtlasContext context, AtlasImage image) {
+public class AtlasPack
+{
+    public readonly AtlasContext context;
+    public readonly AtlasImage image;
+
+    public AtlasPack(AtlasContext context, AtlasImage image)
+    {
         this.context = context;
         this.image = image;
     }
 }
 
-public struct AtlasImage(byte[] imageData) {
-    public byte[] imageData = imageData;
+public struct AtlasImage
+{
+    public readonly byte[] imageData;
+
+    public AtlasImage(byte[] imageData)
+    {
+        this.imageData = imageData;
+    }
 }
 
-public static partial class AtlasPacker {
-    private static readonly string[] imageExtensions = new[] { "*.bmp", "*.gif", "*.jpg", "*.jpeg", "*.png", "*.tif", "*.tiff" };
+public static partial class AtlasPacker
+{
+    private static readonly string[] imageExtensions = new[]
+        { "*.bmp", "*.gif", "*.jpg", "*.jpeg", "*.png", "*.tif", "*.tiff" };
+
     private static readonly string atlasFileName = "atlas.png";
     private static readonly string contextFileName = "context.json";
-
-    /// <param name="directory"></param>
-    /// <returns>Full Name of all images in the directory</returns>
-    public static IReadOnlyList<string> GetImages(string directory) {
+    
+    /// <summary>Get All image as full path inside target directory recursively</summary>
+    /// <param name="directory">directory full path</param>
+    /// <returns>Full name of all images in the directory</returns>
+    public static IReadOnlyList<string> GetImages(string directory)
+    {
         var directoryInfo = new DirectoryInfo(directory);
-        if (!directoryInfo.Exists) {
+        if (!directoryInfo.Exists)
+        {
             return Array.Empty<string>();
         }
+
         var imagePaths = new List<string>();
-        foreach (var extension in imageExtensions) {
+        foreach (var extension in imageExtensions)
+        {
             var files = directoryInfo.GetFiles(extension, SearchOption.AllDirectories);
             imagePaths.AddRange(files.Select(x => x.FullName));
         }
@@ -73,62 +95,78 @@ public static partial class AtlasPacker {
         return imagePaths;
     }
     
-    public static int PackAtlas(IReadOnlyList<string> sourceImagePaths, out AtlasPack? atlasPack) {
+    public static bool TryPackAtlas(ReadOnlySpan<string> sourceImagePaths, out AtlasPack? atlasPack)
+    {
         atlasPack = null;
-        if (sourceImagePaths.Count <= 0) {
-            return 0;
+        if (sourceImagePaths.Length <= 0)
+        {
+            return false;
         }
 
         var imageMap = LoadImages(sourceImagePaths);
-        if (imageMap.Count == 0) {
-            return 0;
+        if (imageMap.Count == 0)
+        {
+            return false;
         }
 
-        var packedCount = GetRectPackResult(imageMap, out var atlasContext, out var bounds);
-        if (packedCount <= 0) {
-            return 0;
+        AtlasContext? atlasContext;
+        Size bounds;
+        try
+        {
+            GetRectPackResult(imageMap, out atlasContext, out bounds);
         }
-        
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            return false;
+        }
+
         var atlasImage = PackImage(atlasContext, imageMap, bounds);
         atlasPack = new AtlasPack(atlasContext, atlasImage);
-        return packedCount;
+        return true;
     }
 
-    public static int PackAtlas(IReadOnlyList<string> sourceImagePath, string atlasPath) {
-        var packedCount = PackAtlas(sourceImagePath, out var atlasPack);
-        if (atlasPack == null) {
-            return 0;
+    public static bool TryPackAtlas(ReadOnlySpan<string> sourceImagePath, string atlasPath)
+    {
+        if (!TryPackAtlas(sourceImagePath, out var atlasPack) || atlasPack == null)
+        {
+            return false;
         }
-        
+
         CreateFileDirectoryIfNotExist(atlasPath);
-        
+
         using var archiveStream = new FileStream(atlasPath, FileMode.OpenOrCreate);
         SavePackAsAtlas(atlasPack, archiveStream);
 
-        return packedCount;
+        return true;
     }
-    
-    public static int PackAtlasAsFolder(IReadOnlyList<string> sourceImagePath, string folderPath) {
-        var packedCount = PackAtlas(sourceImagePath, out var atlasPack);
-        if (atlasPack == null) {
-            return 0;
+
+    public static bool TryPackAtlasAsFolder(ReadOnlySpan<string> sourceImagePath, string folderPath)
+    {
+        if (!TryPackAtlas(sourceImagePath, out var atlasPack) || atlasPack == null)
+        {
+            return false;
         }
 
-        if (!Directory.Exists(folderPath)) {
+        if (!Directory.Exists(folderPath))
+        {
             Directory.CreateDirectory(folderPath);
         }
-        
+
         SavePackAsFolder(atlasPack, folderPath);
 
-        return packedCount;
+        return true;
     }
 
-    public static void SavePackAsAtlas(AtlasPack atlasPack, Stream stream) {
-        if (atlasPack == null) {
+    public static void SavePackAsAtlas(AtlasPack atlasPack, Stream stream)
+    {
+        if (atlasPack == null)
+        {
             throw new ArgumentNullException(nameof(atlasPack));
         }
 
-        if (stream == null) {
+        if (stream == null)
+        {
             throw new ArgumentNullException(nameof(stream));
         }
 
@@ -136,15 +174,18 @@ public static partial class AtlasPacker {
         var context = atlasPack.context;
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, false);
-        
+
         var atlasEntry = archive.CreateEntry(atlasFileName);
-        using (var entryStream = atlasEntry.Open()) {
+        using (var entryStream = atlasEntry.Open())
+        {
             entryStream.Write(atlasImage.imageData, 0, atlasImage.imageData.Length);
         }
-        
+
         var contextEntry = archive.CreateEntry(contextFileName);
-        using (var entryStream = contextEntry.Open()) {
-            var options = new JsonSerializerOptions {
+        using (var entryStream = contextEntry.Open())
+        {
+            var options = new JsonSerializerOptions
+            {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
@@ -152,18 +193,22 @@ public static partial class AtlasPacker {
         }
     }
 
-    public static AtlasPack LoadAtlas(string atlasPath) {
-        if (string.IsNullOrEmpty(atlasPath)) {
+    public static AtlasPack LoadAtlas(string atlasPath)
+    {
+        if (string.IsNullOrEmpty(atlasPath))
+        {
             throw new ArgumentNullException(nameof(atlasPath));
         }
 
-        if (!File.Exists(atlasPath)) {
+        if (!File.Exists(atlasPath))
+        {
             throw new FileNotFoundException("Atlas file not found.", atlasPath);
         }
 
         using var archive = ZipFile.OpenRead(atlasPath);
         var atlasEntry = archive.GetEntry(atlasFileName);
-        if (atlasEntry == null) {
+        if (atlasEntry == null)
+        {
             throw new FileNotFoundException("Atlas image not found in the archive.");
         }
 
@@ -172,9 +217,11 @@ public static partial class AtlasPacker {
         var offset = 0;
         var remaining = atlasImageData.Length;
 
-        while (remaining > 0) {
+        while (remaining > 0)
+        {
             int bytesRead = atlasStream.Read(atlasImageData, offset, remaining);
-            if (bytesRead == 0) {
+            if (bytesRead == 0)
+            {
                 throw new EndOfStreamException("Unexpected end of stream while reading the atlas image data.");
             }
 
@@ -183,41 +230,49 @@ public static partial class AtlasPacker {
         }
 
         var contextEntry = archive.GetEntry(contextFileName);
-        if (contextEntry == null) {
+        if (contextEntry == null)
+        {
             throw new FileNotFoundException("Context file not found in the archive.");
         }
 
         using var contextStream = contextEntry.Open();
         var context = JsonSerializer.Deserialize<Dictionary<string, Rect>>(contextStream);
 
-        if (context == null) {
+        if (context == null)
+        {
             throw new InvalidOperationException("Failed to deserialize context from the archive.");
         }
 
         var atlasContext = new AtlasContext(context);
         var atlasImage = new AtlasImage(atlasImageData);
-        
+
         return new AtlasPack(atlasContext, atlasImage);
     }
 
-    public static void SavePackAsFolder(AtlasPack atlasPack, string atlasFolderPath) {
-        if (atlasPack == null) {
+    public static void SavePackAsFolder(AtlasPack atlasPack, string atlasFolderPath)
+    {
+        if (atlasPack == null)
+        {
             throw new ArgumentNullException(nameof(atlasPack));
         }
 
         var atlasImage = atlasPack.image;
         var context = atlasPack.context;
 
-        if (!Directory.Exists(atlasFolderPath)) {
+        if (!Directory.Exists(atlasFolderPath))
+        {
             Directory.CreateDirectory(atlasFolderPath);
         }
-        
-        using (var atlasStream = new FileStream(Path.Combine(atlasFolderPath, atlasFileName), FileMode.Create)) {
+
+        using (var atlasStream = new FileStream(Path.Combine(atlasFolderPath, atlasFileName), FileMode.Create))
+        {
             atlasStream.Write(atlasImage.imageData, 0, atlasImage.imageData.Length);
         }
-        
-        using (var contextStream = new FileStream(Path.Combine(atlasFolderPath, contextFileName), FileMode.Create)) {
-            var options = new JsonSerializerOptions {
+
+        using (var contextStream = new FileStream(Path.Combine(atlasFolderPath, contextFileName), FileMode.Create))
+        {
+            var options = new JsonSerializerOptions
+            {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
@@ -225,10 +280,12 @@ public static partial class AtlasPacker {
         }
     }
 
-    private static AtlasImage PackImage(AtlasContext context, IReadOnlyDictionary<string, Image> imageMap, Size bounds) {
+    private static AtlasImage PackImage(AtlasContext context, IReadOnlyDictionary<string, Image> imageMap, Size bounds)
+    {
         using var atlasImage = new Image<Rgba32>(bounds.Width, bounds.Height);
 
-        foreach (var (imageName, rect) in context.imageRectMap) {
+        foreach (var (imageName, rect) in context.imageRectMap)
+        {
             var image = imageMap[imageName];
             var point = new Point(rect.X, rect.Y);
             atlasImage.Mutate(ctx => ctx.DrawImage(image, point, 1));
@@ -239,10 +296,11 @@ public static partial class AtlasPacker {
         return new AtlasImage(atlasStream.ToArray());
     }
 
-    private static IReadOnlyDictionary<string, Image> LoadImages(IEnumerable<string> imagePaths)
+    private static IReadOnlyDictionary<string, Image> LoadImages(ReadOnlySpan<string> imagePaths)
     {
         var images = new Dictionary<string, Image>();
-        foreach (var path in imagePaths) {
+        foreach (var path in imagePaths)
+        {
             var name = Path.GetFileName(path);
             var image = Image.Load(path);
             images.Add(name, image);
@@ -252,21 +310,23 @@ public static partial class AtlasPacker {
     }
 
     private static readonly List<KeyValuePair<string, Image>> imageArrayCache = new();
-    private static int GetRectPackResult(IReadOnlyDictionary<string, Image> imageMap, out AtlasContext atlasContext, out Size atlasSize)
+
+    private static void GetRectPackResult(IReadOnlyDictionary<string, Image> imageMap, out AtlasContext atlasContext, out Size atlasSize)
     {
         var rectangles = new PackingRectangle[imageMap.Count];
 
         imageArrayCache.Clear();
         imageArrayCache.AddRange(imageMap);
         var images = imageArrayCache;
-        for (var i = 0; i < images.Count; i++) {
+        for (var i = 0; i < images.Count; i++)
+        {
             var image = images[i].Value;
             rectangles[i] = new PackingRectangle(0, 0, (uint)image.Width, (uint)image.Height, i);
         }
 
-        RectanglePacker.Pack(rectangles.AsSpan(), out var bounds);
+        RectanglePacker.Pack(rectangles, out var bounds);
         Array.Sort(rectangles, (a, b) => a.Id.CompareTo(b.Id));
-        
+
         var imageRectMap = new Dictionary<string, Rect>();
         for (var i = 0; i < images.Count; i++)
         {
@@ -275,16 +335,18 @@ public static partial class AtlasPacker {
             var point = new Point((int)rectangles[i].X, (int)rectangles[i].Y);
             imageRectMap[imageName] = new Rect(point.X, point.Y, image.Width, image.Height);
         }
+
         atlasSize = new Size((int)bounds.Width, (int)bounds.Height);
 
         atlasContext = new AtlasContext(imageRectMap);
-        return rectangles.Length;
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void CreateFileDirectoryIfNotExist(string filePath) {
+    private static void CreateFileDirectoryIfNotExist(string filePath)
+    {
         var fileInfo = new FileInfo(filePath);
-        if (fileInfo.Directory != null && !fileInfo.Directory.Exists) {
+        if (fileInfo.Directory != null && !fileInfo.Directory.Exists)
+        {
             fileInfo.Directory.Create();
         }
     }
