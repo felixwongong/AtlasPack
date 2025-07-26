@@ -25,7 +25,7 @@
 ### Main API (Static)
 
 ```csharp
-AtlasPacker.GetImages(string directory) : IReadOnlyList<string>
+AtlasPacker.GetImages(string directory) : string[]
 AtlasPacker.PackAtlas(ReadOnlySpan<string> sourceImagePaths) : AtlasPack?
 AtlasPacker.PackAtlas(ReadOnlySpan<string> sourceImagePaths, string atlasPath) : void
 AtlasPacker.PackAtlasAsFolder(ReadOnlySpan<string> sourceImagePaths, string folderPath) : void

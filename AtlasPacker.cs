@@ -77,7 +77,7 @@ public static partial class AtlasPacker
     /// <summary>Get All image as full path inside target directory recursively</summary>
     /// <param name="directory">directory full path</param>
     /// <returns>Full name of all images in the directory</returns>
-    public static IReadOnlyList<string> GetImages(string directory)
+    public static string[] GetImages(string directory)
     {
         var directoryInfo = new DirectoryInfo(directory);
         if (!directoryInfo.Exists)
@@ -92,7 +92,7 @@ public static partial class AtlasPacker
             imagePaths.AddRange(files.Select(x => x.FullName));
         }
 
-        return imagePaths;
+        return imagePaths.ToArray();
     }
     
     public static AtlasPack? PackAtlas(ReadOnlySpan<string> sourceImagePaths)
