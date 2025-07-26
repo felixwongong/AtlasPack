@@ -95,19 +95,14 @@ public static partial class AtlasPacker
         return imagePaths;
     }
     
-    public static bool TryPackAtlas(ReadOnlySpan<string> sourceImagePaths, out AtlasPack? atlasPack)
+    public static AtlasPack? PackAtlas(ReadOnlySpan<string> sourceImagePaths)
     {
-        atlasPack = null;
         if (sourceImagePaths.Length <= 0)
-        {
-            return false;
-        }
+            return null;
 
         var imageMap = LoadImages(sourceImagePaths);
         if (imageMap.Count == 0)
-        {
-            return false;
-        }
+            return null;
 
         AtlasContext? atlasContext;
         Size bounds;
@@ -118,34 +113,53 @@ public static partial class AtlasPacker
         catch (Exception e)
         {
             Console.WriteLine(e);
-            return false;
+            throw;
         }
 
         var atlasImage = PackImage(atlasContext, imageMap, bounds);
-        atlasPack = new AtlasPack(atlasContext, atlasImage);
-        return true;
+        return new AtlasPack(atlasContext, atlasImage);
     }
 
-    public static bool TryPackAtlas(ReadOnlySpan<string> sourceImagePath, string atlasPath)
+    public static void PackAtlas(ReadOnlySpan<string> sourceImagePath, string atlasPath)
     {
-        if (!TryPackAtlas(sourceImagePath, out var atlasPack) || atlasPack == null)
+        AtlasPack? atlasPack;
+        try
         {
-            return false;
+            atlasPack = PackAtlas(sourceImagePath);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+
+        if (atlasPack == null)
+        {
+            throw new Exception("Failed to pack atlas. No images found or packing failed.");
         }
 
         CreateFileDirectoryIfNotExist(atlasPath);
 
         using var archiveStream = new FileStream(atlasPath, FileMode.OpenOrCreate);
         SavePackAsAtlas(atlasPack, archiveStream);
-
-        return true;
     }
 
-    public static bool TryPackAtlasAsFolder(ReadOnlySpan<string> sourceImagePath, string folderPath)
+    public static void PackAtlasAsFolder(ReadOnlySpan<string> sourceImagePath, string folderPath)
     {
-        if (!TryPackAtlas(sourceImagePath, out var atlasPack) || atlasPack == null)
+        AtlasPack? atlasPack;
+        try
         {
-            return false;
+            atlasPack = PackAtlas(sourceImagePath);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+
+        if (atlasPack == null)
+        {
+            throw new Exception("Failed to pack atlas. No images found or packing failed.");
         }
 
         if (!Directory.Exists(folderPath))
@@ -154,8 +168,6 @@ public static partial class AtlasPacker
         }
 
         SavePackAsFolder(atlasPack, folderPath);
-
-        return true;
     }
 
     public static void SavePackAsAtlas(AtlasPack atlasPack, Stream stream)
