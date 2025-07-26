@@ -1,4 +1,3 @@
-using System.Collections;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -10,38 +9,36 @@ using SixLabors.ImageSharp.Processing;
 
 public struct Rect
 {
-    public int X { get; }
-    public int Y { get; }
-    public int Width { get; }
-    public int Height { get; }
+    public int x { get; }
+    public int y { get; }
+    public int width { get; }
+    public int height { get; }
 
     public Rect(int x, int y, int width, int height)
     {
-        X = x;
-        Y = y;
-        Width = width;
-        Height = height;
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
     }
 }
 
-public class AtlasContext : IEnumerable<KeyValuePair<string, Rect>>
+public struct Size
 {
-    public IReadOnlyDictionary<string, Rect> imageRectMap { get; }
-
-    public AtlasContext(IReadOnlyDictionary<string, Rect> imageRectMap)
+    public int width { get; }
+    public int height { get; }
+    
+    public Size(int width, int height)
     {
-        this.imageRectMap = imageRectMap;
+        this.width = width;
+        this.height = height;
     }
+}
 
-    public IEnumerator<KeyValuePair<string, Rect>> GetEnumerator()
-    {
-        return imageRectMap.GetEnumerator();
-    }
-
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-        return GetEnumerator();
-    }
+public class AtlasContext
+{
+    public Size bounds { get; set; }
+    public IReadOnlyDictionary<string, Rect>? imageRectMap { get; set; }
 }
 
 public class AtlasPack
@@ -105,10 +102,9 @@ public static partial class AtlasPacker
             return null;
 
         AtlasContext? atlasContext;
-        Size bounds;
         try
         {
-            GetRectPackResult(imageMap, out atlasContext, out bounds);
+            GetRectPackResult(imageMap, out atlasContext);
         }
         catch (Exception e)
         {
@@ -116,8 +112,11 @@ public static partial class AtlasPacker
             throw;
         }
 
-        var atlasImage = PackImage(atlasContext, imageMap, bounds);
-        return new AtlasPack(atlasContext, atlasImage);
+        var atlasImage = PackImage(atlasContext, imageMap);
+        if (atlasImage == null)
+            return null;
+        
+        return new AtlasPack(atlasContext, atlasImage.Value);
     }
 
     public static void PackAtlas(ReadOnlySpan<string> sourceImagePath, string atlasPath)
@@ -201,7 +200,7 @@ public static partial class AtlasPacker
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
-            JsonSerializer.Serialize(entryStream, context.imageRectMap, options);
+            JsonSerializer.Serialize(entryStream, context, options);
         }
     }
 
@@ -248,14 +247,11 @@ public static partial class AtlasPacker
         }
 
         using var contextStream = contextEntry.Open();
-        var context = JsonSerializer.Deserialize<Dictionary<string, Rect>>(contextStream);
-
-        if (context == null)
+        var atlasContext = JsonSerializer.Deserialize<AtlasContext>(contextStream);
+        if (atlasContext == null)
         {
             throw new InvalidOperationException("Failed to deserialize context from the archive.");
         }
-
-        var atlasContext = new AtlasContext(context);
         var atlasImage = new AtlasImage(atlasImageData);
 
         return new AtlasPack(atlasContext, atlasImage);
@@ -288,18 +284,22 @@ public static partial class AtlasPacker
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
-            JsonSerializer.Serialize(contextStream, context.imageRectMap, options);
+            JsonSerializer.Serialize(contextStream, context, options);
         }
     }
 
-    private static AtlasImage PackImage(AtlasContext context, IReadOnlyDictionary<string, Image> imageMap, Size bounds)
+    private static AtlasImage? PackImage(AtlasContext context, IReadOnlyDictionary<string, Image> imageMap)
     {
-        using var atlasImage = new Image<Rgba32>(bounds.Width, bounds.Height);
+        if (context.imageRectMap == null)
+            return null;
+        
+        var bounds = context.bounds;
+        using var atlasImage = new Image<Rgba32>(bounds.width, bounds.height);
 
         foreach (var (imageName, rect) in context.imageRectMap)
         {
             var image = imageMap[imageName];
-            var point = new Point(rect.X, rect.Y);
+            var point = new Point(rect.x, rect.y);
             atlasImage.Mutate(ctx => ctx.DrawImage(image, point, 1));
         }
 
@@ -323,7 +323,7 @@ public static partial class AtlasPacker
 
     private static readonly List<KeyValuePair<string, Image>> imageArrayCache = new();
 
-    private static void GetRectPackResult(IReadOnlyDictionary<string, Image> imageMap, out AtlasContext atlasContext, out Size atlasSize)
+    private static void GetRectPackResult(IReadOnlyDictionary<string, Image> imageMap, out AtlasContext atlasContext)
     {
         var rectangles = new PackingRectangle[imageMap.Count];
 
@@ -348,9 +348,12 @@ public static partial class AtlasPacker
             imageRectMap[imageName] = new Rect(point.X, point.Y, image.Width, image.Height);
         }
 
-        atlasSize = new Size((int)bounds.Width, (int)bounds.Height);
-
-        atlasContext = new AtlasContext(imageRectMap);
+        var atlasSize = new Size((int)bounds.Width, (int)bounds.Height);
+        atlasContext = new AtlasContext
+        {
+            bounds = atlasSize,
+            imageRectMap = imageRectMap
+        };
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
