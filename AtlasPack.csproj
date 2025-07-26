@@ -4,11 +4,19 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <PackageId>cfEngine.AtlasPack</PackageId>
+        <Version>0.1.2</Version>
+        <Authors>Felix Wong</Authors>
+        <Company>Cofy Dev</Company>
+        
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="RectpackSharp" Version="1.2.0" />
-      <PackageReference Include="SixLabors.ImageSharp" Version="3.1.10" />
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+        <PackageReference Include="RectpackSharp" Version="1.2.0"/>
+        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.10"/>
     </ItemGroup>
 
 </Project>
