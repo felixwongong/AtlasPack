@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using RectpackSharp;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
@@ -14,6 +15,7 @@ public struct Rect
     public int width { get; }
     public int height { get; }
 
+    [JsonConstructor]
     public Rect(int x, int y, int width, int height)
     {
         this.x = x;
@@ -28,6 +30,7 @@ public struct Size
     public int width { get; }
     public int height { get; }
     
+    [JsonConstructor]
     public Size(int width, int height)
     {
         this.width = width;
@@ -38,7 +41,7 @@ public struct Size
 public class AtlasContext
 {
     public Size bounds { get; set; }
-    public IReadOnlyDictionary<string, Rect>? imageRectMap { get; set; }
+    public IReadOnlyDictionary<string, Rect> imageRectMap { get; set; }
 }
 
 public class AtlasPack
@@ -113,10 +116,7 @@ public static partial class AtlasPacker
         }
 
         var atlasImage = PackImage(atlasContext, imageMap);
-        if (atlasImage == null)
-            return null;
-        
-        return new AtlasPack(atlasContext, atlasImage.Value);
+        return new AtlasPack(atlasContext, atlasImage);
     }
 
     public static void PackAtlas(ReadOnlySpan<string> sourceImagePath, string atlasPath)
@@ -288,11 +288,8 @@ public static partial class AtlasPacker
         }
     }
 
-    private static AtlasImage? PackImage(AtlasContext context, IReadOnlyDictionary<string, Image> imageMap)
+    private static AtlasImage PackImage(AtlasContext context, IReadOnlyDictionary<string, Image> imageMap)
     {
-        if (context.imageRectMap == null)
-            return null;
-        
         var bounds = context.bounds;
         using var atlasImage = new Image<Rgba32>(bounds.width, bounds.height);
 
