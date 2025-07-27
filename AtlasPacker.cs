@@ -41,7 +41,7 @@ public struct Size
 public class AtlasContext
 {
     public Size bounds { get; set; }
-    public IReadOnlyDictionary<string, Rect> imageRectMap { get; set; }
+    public IReadOnlyDictionary<string, Rect> imageRectMap { get; set; } = new Dictionary<string, Rect>();
 }
 
 public class AtlasPack
